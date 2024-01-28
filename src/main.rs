@@ -7,7 +7,7 @@ use std::{
 };
 
 use clap::Parser;
-use log::{debug, error, info, trace};
+use log::{debug, info, trace};
 use path_absolutize::*;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,43 @@ struct ProjectDirectory {
     path: PathBuf,
     links: Vec<Link>,
 }
+impl ProjectDirectory {
+    fn new(path: PathBuf) -> Self {
+        ProjectDirectory {
+            path,
+            links: vec![],
+        }
+    }
+
+    fn add_link(
+        &mut self,
+        link: &String,
+        destination_relative: &String,
+    ) -> Result<(), Box<dyn Error>> {
+        let destination_abs = self.path.join(destination_relative);
+        self.links.push(Link {
+            link: link.into(),
+            destination_abs: destination_abs.clone(),
+        });
+
+        self.links.push(Link {
+            link: PathBuf::from("node_modules").join(link),
+            destination_abs,
+        });
+
+        Ok(())
+    }
+
+    fn get_absolute_links(&self) -> impl Iterator<Item = (PathBuf, PathBuf)> + '_ {
+        return self.links.iter().map(|link| {
+            let link_path = self.path.join(link.link.clone());
+            let link_dir = link_path.parent().unwrap();
+            let destination_relative =
+                pathdiff::diff_paths(link.destination_abs.clone(), link_dir).unwrap();
+            (link_path, destination_relative)
+        });
+    }
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
@@ -49,46 +86,25 @@ fn main() -> Result<(), Box<dyn Error>> {
     trace!("package.json content: {}", pkg_json_content);
     let res: ModuleAliases = serde_json::from_str(&pkg_json_content)?;
 
-    let mut links_iter = res.module_aliases.iter();
-    while let Some((link_name, dest_path)) = links_iter.next() {
-        trace!("Will link path {} as {}", dest_path, link_name);
-        let mut link_base_iter = [".", "node_modules"].iter();
-        while let Some(link_base) = link_base_iter.next() {
-            let link_path = project_root.join(link_base).join(link_name);
-            let link_path = Path::new(&link_path).absolutize()?;
-            if let Some(link_dir_name) = link_path.parent() {
-                let link_dir_abs = link_dir_name.absolutize()?;
-                debug!("Ensuring dir {}", link_dir_abs.display());
-                fs::create_dir_all(link_dir_abs.clone())?;
+    let mut project_directory = ProjectDirectory::new(project_root_abs.clone().into());
+    for (link_name, dest_path) in res.module_aliases.iter() {
+        project_directory.add_link(link_name, dest_path)?
+    }
+    for (link_path, dest_path) in project_directory.get_absolute_links() {
+        let link_dir_abs = link_path.parent().unwrap();
+        debug!("Ensuring dir {}", link_dir_abs.display());
+        fs::create_dir_all(link_dir_abs)?;
 
-                let idk = project_root_abs.join(dest_path);
-                let dest_abs = idk.absolutize()?;
-
-                let Some(link_content) =
-                    pathdiff::diff_paths(dest_abs.clone(), link_dir_abs.clone())
-                else {
-                    error!("Failed to diff paths");
-                    continue;
-                };
-                trace!(
-                    "Diff between {} and {} is {}",
-                    link_dir_abs.display(),
-                    project_root_abs.display(),
-                    link_content.display(),
-                );
-
-                if link_path.exists() || link_path.is_symlink() {
-                    debug!("Removing file {}", link_path.display());
-                    fs::remove_file(link_path.clone())?;
-                }
-                info!(
-                    "Linking: {} -> {}",
-                    link_path.display(),
-                    link_content.display()
-                );
-                unix::fs::symlink(link_content, link_path)?;
-            }
+        if link_path.exists() || link_path.is_symlink() {
+            debug!("Removing file {}", link_path.display());
+            fs::remove_file(link_path.clone())?;
         }
+        info!(
+            "Linking: {} -> {}",
+            link_path.display(),
+            dest_path.display()
+        );
+        unix::fs::symlink(dest_path, link_path)?;
     }
 
     //println!("Hello, world! {}", pkg_json_content);
