@@ -1,10 +1,4 @@
-use std::{
-    collections::HashMap,
-    error::Error,
-    fs,
-    os::unix,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, error::Error, fs, os::unix, path::PathBuf};
 
 use clap::Parser;
 use log::{debug, info, trace};
