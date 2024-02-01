@@ -1,3 +1,4 @@
+mod project_directory;
 use std::{collections::HashMap, fs, os::unix, path::PathBuf};
 
 use clap::Parser;
@@ -5,57 +6,29 @@ use log::{debug, info, trace};
 use path_absolutize::*;
 use serde::{Deserialize, Serialize};
 
+use crate::project_directory::{ProjectDirOpts, ProjectDirectory};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PkgJson {
+    #[serde(rename = "moduleAliases")]
+    module_aliases: Option<ModuleAliases>,
+    workspaces: Option<Vec<PathBuf>>,
+}
 #[derive(Serialize, Deserialize, Debug)]
 struct ModuleAliases {
-    #[serde(rename = "moduleAliases")]
-    module_aliases: HashMap<String, String>,
+    links: Option<HashMap<PathBuf, PathBuf>>,
+    imports: Option<Vec<PathBuf>>,
 }
 
 #[derive(Parser)]
 struct Cli {
     project_path: PathBuf,
+    #[arg(short, long, help = "Do not link to node_modules of each workspace")]
+    node_modules_skip: bool,
+    #[arg(short, long, help = "Do not link to root of each workspace")]
+    workspace_skip: bool,
     #[command(flatten)]
     verbosity: clap_verbosity_flag::Verbosity,
-}
-
-struct Link {
-    link: PathBuf,
-    destination_abs: PathBuf,
-}
-struct ProjectDirectory {
-    path: PathBuf,
-    links: Vec<Link>,
-}
-impl ProjectDirectory {
-    fn new(path: PathBuf) -> Self {
-        ProjectDirectory {
-            path,
-            links: vec![],
-        }
-    }
-
-    fn add_link(&mut self, link: &String, destination_relative: &String) {
-        let destination_abs = self.path.join(destination_relative);
-        self.links.push(Link {
-            link: link.into(),
-            destination_abs: destination_abs.clone(),
-        });
-
-        self.links.push(Link {
-            link: PathBuf::from("node_modules").join(link),
-            destination_abs,
-        });
-    }
-
-    fn get_absolute_links(&self) -> impl Iterator<Item = (PathBuf, PathBuf)> + '_ {
-        return self.links.iter().map(|link| {
-            let link_path = self.path.join(link.link.clone());
-            let link_dir = link_path.parent().unwrap();
-            let destination_relative =
-                pathdiff::diff_paths(link.destination_abs.clone(), link_dir).unwrap();
-            (link_path, destination_relative)
-        });
-    }
 }
 
 #[derive(Debug)]
@@ -88,11 +61,21 @@ fn main() -> Result<(), CliError> {
     trace!("package.json path: {pkg_json_path:?}");
     let pkg_json_content = fs::read_to_string(pkg_json_path)?;
     trace!("package.json content: {}", pkg_json_content);
-    let res: ModuleAliases = serde_json::from_str(&pkg_json_content)?;
+    let res: PkgJson = serde_json::from_str(&pkg_json_content)?;
 
-    let mut project_directory = ProjectDirectory::new(project_root_abs.clone().into());
-    for (link_name, dest_path) in res.module_aliases.iter() {
-        project_directory.add_link(link_name, dest_path);
+    let mut project_directory = ProjectDirectory::new(
+        project_root_abs.clone().into(),
+        ProjectDirOpts {
+            no_node_modules: args.node_modules_skip,
+            no_workspace: args.workspace_skip,
+        },
+    );
+    if let Some(module_links) = res.module_aliases {
+        if let Some(links) = module_links.links {
+            for (link_name, dest_path) in links.iter() {
+                project_directory.add_link(link_name, dest_path);
+            }
+        }
     }
     for (link_path, dest_path) in project_directory.get_absolute_links() {
         let link_dir_abs = link_path.parent().unwrap();
