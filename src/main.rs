@@ -1,5 +1,5 @@
 mod project_directory;
-use std::{collections::HashMap, fs, os::unix, path::PathBuf};
+use std::{collections::HashMap, fs, os::unix, path::PathBuf, rc::Rc};
 
 use clap::Parser;
 use log::{debug, info, trace};
@@ -47,37 +47,59 @@ impl From<serde_json::Error> for CliError {
     }
 }
 
+struct Project {
+    dirs: Vec<ProjectDirectory>,
+    opts: Rc<ProjectDirOpts>,
+}
+
+impl Project {
+    fn new(opts: ProjectDirOpts) -> Self {
+        Project {
+            dirs: vec![],
+            opts: Rc::new(opts),
+        }
+    }
+    fn load(&mut self, path_abs: PathBuf) -> Result<(), CliError> {
+        trace!("Project root: {path_abs:?}");
+        let pkg_json_path = path_abs.join("package.json");
+        trace!("package.json path: {pkg_json_path:?}");
+        let pkg_json_content = fs::read_to_string(pkg_json_path)?;
+        trace!("package.json content: {}", pkg_json_content);
+        let res: PkgJson = serde_json::from_str(&pkg_json_content)?;
+
+        let mut project_directory = ProjectDirectory::new(path_abs.clone(), Rc::clone(&self.opts));
+        if let Some(module_links) = res.module_aliases {
+            if let Some(links) = module_links.links {
+                for (link_name, dest_path) in links.iter() {
+                    project_directory.add_link(link_name, dest_path);
+                }
+            }
+        }
+        self.dirs.push(project_directory);
+        Ok(())
+    }
+
+    fn get_links(&self) -> impl Iterator<Item = (PathBuf, PathBuf)> + '_ {
+        self.dirs.iter().flat_map(|dir| dir.get_absolute_links())
+    }
+}
+
 fn main() -> Result<(), CliError> {
     let args = Cli::parse();
     env_logger::builder()
         .filter_level(args.verbosity.log_level_filter())
         .init();
 
+    let mut project = Project::new(ProjectDirOpts {
+        no_node_modules: args.node_modules_skip,
+        no_workspace: args.workspace_skip,
+    });
     let project_root = args.project_path;
     let project_root_path = PathBuf::from(&project_root);
     let project_root_abs = project_root_path.absolutize()?;
-    trace!("Project root: {project_root:?}");
-    let pkg_json_path = project_root.join("package.json");
-    trace!("package.json path: {pkg_json_path:?}");
-    let pkg_json_content = fs::read_to_string(pkg_json_path)?;
-    trace!("package.json content: {}", pkg_json_content);
-    let res: PkgJson = serde_json::from_str(&pkg_json_content)?;
 
-    let mut project_directory = ProjectDirectory::new(
-        project_root_abs.clone().into(),
-        ProjectDirOpts {
-            no_node_modules: args.node_modules_skip,
-            no_workspace: args.workspace_skip,
-        },
-    );
-    if let Some(module_links) = res.module_aliases {
-        if let Some(links) = module_links.links {
-            for (link_name, dest_path) in links.iter() {
-                project_directory.add_link(link_name, dest_path);
-            }
-        }
-    }
-    for (link_path, dest_path) in project_directory.get_absolute_links() {
+    project.load(project_root_abs.into())?;
+    for (link_path, dest_path) in project.get_links() {
         let link_dir_abs = link_path.parent().unwrap();
         debug!("Ensuring dir {}", link_dir_abs.display());
         fs::create_dir_all(link_dir_abs)
