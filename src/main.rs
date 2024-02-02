@@ -1,26 +1,13 @@
 mod project;
 mod project_directory;
-use std::{collections::HashMap, fs, os::unix, path::PathBuf};
+use std::{fs, os::unix, path::PathBuf};
 
 use clap::Parser;
 use log::{debug, info};
 use path_absolutize::*;
 use project::Project;
-use serde::{Deserialize, Serialize};
 
 use crate::project_directory::ProjectDirOpts;
-
-#[derive(Serialize, Deserialize, Debug)]
-struct PkgJson {
-    #[serde(rename = "moduleAliases")]
-    module_aliases: Option<ModuleAliases>,
-    workspaces: Option<Vec<PathBuf>>,
-}
-#[derive(Serialize, Deserialize, Debug)]
-struct ModuleAliases {
-    links: Option<HashMap<PathBuf, PathBuf>>,
-    imports: Option<Vec<PathBuf>>,
-}
 
 #[derive(Parser)]
 struct Cli {
@@ -83,6 +70,5 @@ fn main() -> Result<(), CliError> {
         unix::fs::symlink(dest_path, link_path)?;
     }
 
-    //println!("Hello, world! {}", pkg_json_content);
     Ok(())
 }

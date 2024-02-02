@@ -1,10 +1,11 @@
 use std::{collections::HashMap, fs, path::PathBuf, rc::Rc};
 
 use log::trace;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     project_directory::{ProjectDirOpts, ProjectDirectory},
-    CliError, PkgJson,
+    CliError,
 };
 
 pub struct Project {
@@ -39,10 +40,27 @@ impl Project {
             }
         }
         self.dirs.insert(path_relative, project_directory);
+        if let Some(workspaces) = res.workspaces {
+            for ws in workspaces {
+                self.load(ws)?;
+            }
+        }
         Ok(())
     }
 
     pub fn get_links(&self) -> impl Iterator<Item = (PathBuf, PathBuf)> + '_ {
         self.dirs.values().flat_map(|dir| dir.get_absolute_links())
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PkgJson {
+    #[serde(rename = "moduleAliases")]
+    module_aliases: Option<ModuleAliases>,
+    workspaces: Option<Vec<PathBuf>>,
+}
+#[derive(Serialize, Deserialize, Debug)]
+struct ModuleAliases {
+    links: Option<HashMap<PathBuf, PathBuf>>,
+    imports: Option<Vec<PathBuf>>,
 }
