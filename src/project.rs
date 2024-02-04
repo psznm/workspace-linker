@@ -8,8 +8,9 @@ use crate::{
     CliError,
 };
 
+pub type ProjectDirs = HashMap<PathBuf, ProjectDirectory>;
 pub struct Project {
-    dirs: HashMap<PathBuf, ProjectDirectory>,
+    dirs: ProjectDirs,
     opts: Rc<ProjectDirOpts>,
     project_path: PathBuf,
 }
@@ -38,6 +39,11 @@ impl Project {
                     project_directory.add_link(link_name, dest_path);
                 }
             }
+            if let Some(imports) = module_links.imports {
+                imports
+                    .iter()
+                    .for_each(|import| project_directory.add_import(import))
+            }
         }
         self.dirs.insert(path_relative, project_directory);
         if let Some(workspaces) = res.workspaces {
@@ -49,7 +55,9 @@ impl Project {
     }
 
     pub fn get_links(&self) -> impl Iterator<Item = (PathBuf, PathBuf)> + '_ {
-        self.dirs.values().flat_map(|dir| dir.get_absolute_links())
+        self.dirs
+            .values()
+            .flat_map(|dir| dir.get_absolute_links(&self.dirs))
     }
 }
 
