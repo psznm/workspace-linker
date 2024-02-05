@@ -1,12 +1,15 @@
 {
   "name": "workspace-linker",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Tool to symlink various directories inside your workspaces and between them.",
   "bin": {
     "workspace-linker": "target/release/workspace-linker"
   },
   "scripts": [],
   "author": "psznm",
-  "url": "https://github.com/psznm/workspace-linker.git",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/psznm/workspace-linker.git"
+  },
   "license": "MIT"
 }

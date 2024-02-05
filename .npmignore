@@ -3,3 +3,4 @@
 
 !/target/release/workspace-linker
 !/README.md
+!/package.json
