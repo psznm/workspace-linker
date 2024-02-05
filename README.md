@@ -43,8 +43,8 @@ This will create directory structure in ws2 workspace like
 ```
 ./package.json
 ./src
-./@/ws1Src -> ../ws1/src
-./@/ws2Src -> ./src
-./node_modules/@/ws1Src -> ../../ws1/src
-./node_modules/@/ws2Src -> ../src
+./@/ws1Src -> ../../ws1/src
+./@/ws2Src -> ../src
+./node_modules/@/ws1Src -> ../../../ws1/src
+./node_modules/@/ws2Src -> ../../src
 ```
