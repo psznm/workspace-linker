@@ -1,5 +1,5 @@
 [package]
-name = "module-linker"
+name = "workspace-linker"
 version = "0.1.0"
 edition = "2021"
 

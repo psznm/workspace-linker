@@ -1,0 +1,11 @@
+{
+  "name": "workspace-linker",
+  "version": "1.0.0",
+  "description": "Tool to symlink various directories inside your workspaces and between them.",
+  "bin": {
+    "workspace-linker": "target/release/workspace-linker"
+  },
+  "scripts": [],
+  "author": "psznm",
+  "license": "MIT"
+}

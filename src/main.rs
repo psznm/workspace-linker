@@ -11,7 +11,7 @@ use crate::project_directory::ProjectDirOpts;
 
 #[derive(Parser)]
 struct Cli {
-    project_path: PathBuf,
+    project_path: Option<PathBuf>,
     #[arg(short, long, help = "Do not link to node_modules of each workspace")]
     node_modules_skip: bool,
     #[arg(short, long, help = "Do not link to root of each workspace")]
@@ -42,7 +42,7 @@ fn main() -> Result<(), CliError> {
         .filter_level(args.verbosity.log_level_filter())
         .init();
 
-    let project_root = args.project_path;
+    let project_root = args.project_path.unwrap_or(PathBuf::from("."));
     let project_root_path = PathBuf::from(&project_root);
     let project_root_abs = project_root_path.absolutize()?;
 
