@@ -63,12 +63,14 @@ impl Project {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct PkgJson {
-    #[serde(rename = "moduleAliases")]
+    #[serde(rename = "workspaceLinks")]
     module_aliases: Option<ModuleAliases>,
     workspaces: Option<Vec<PathBuf>>,
 }
 #[derive(Serialize, Deserialize, Debug)]
 struct ModuleAliases {
+    #[serde(rename = "local")]
     links: Option<HashMap<PathBuf, PathBuf>>,
+    #[serde(rename = "imports")]
     imports: Option<Vec<PathBuf>>,
 }
