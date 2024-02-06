@@ -1,6 +1,6 @@
 
 *
 
-!/target/release/workspace-linker
+!/target/x86_64-unknown-linux-gnu/workspace-linker
 !/README.md
 !/package.json

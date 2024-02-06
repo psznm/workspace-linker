@@ -1,9 +1,9 @@
 {
   "name": "workspace-linker",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Tool to symlink various directories inside your workspaces and between them.",
   "bin": {
-    "workspace-linker": "target/release/workspace-linker"
+    "workspace-linker": "target/x86_64-unknown-linux-gnu/workspace-linker"
   },
   "scripts": [],
   "author": "psznm",
