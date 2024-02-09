@@ -18,7 +18,6 @@ pub struct ProjectDirectory {
     options: Rc<ProjectDirOpts>,
 }
 
-type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + 'a>;
 impl ProjectDirectory {
     pub fn new(path: PathBuf, options: Rc<ProjectDirOpts>) -> Self {
         ProjectDirectory {
@@ -49,7 +48,10 @@ impl ProjectDirectory {
             });
         }
     }
-    fn get_links<'a>(&'a self, project_dirs: &'a ProjectDirs) -> LinkIter<'a> {
+    fn get_links<'a>(
+        &'a self,
+        project_dirs: &'a ProjectDirs,
+    ) -> Box<dyn Iterator<Item = &'a Link> + 'a> {
         self.imports
             .iter()
             .fold(Box::new(self.links.iter()), move |acc, import| {
