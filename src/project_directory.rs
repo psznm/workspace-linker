@@ -17,6 +17,8 @@ pub struct ProjectDirectory {
     imports: HashSet<PathBuf>,
     options: Rc<ProjectDirOpts>,
 }
+
+type LinkIter<'a> = Box<dyn Iterator<Item = &'a Link> + 'a>;
 impl ProjectDirectory {
     pub fn new(path: PathBuf, options: Rc<ProjectDirOpts>) -> Self {
         ProjectDirectory {
@@ -47,19 +49,16 @@ impl ProjectDirectory {
             });
         }
     }
-    fn get_links<'a>(&'a self, project_dirs: &'a ProjectDirs) -> Vec<&'a Link> {
-        let mut iters: Vec<&Link> = vec![];
-        self.links.iter().for_each(|item| iters.push(item));
-        for import in self.imports.iter() {
-            let Some(project_dir) = project_dirs.get(import) else {
-                panic!("Missing import");
-            };
-            project_dir
-                .get_links(project_dirs)
-                .iter()
-                .for_each(|item| iters.push(item));
-        }
-        iters
+    fn get_links<'a>(&'a self, project_dirs: &'a ProjectDirs) -> LinkIter<'a> {
+        self.imports
+            .iter()
+            .fold(Box::new(self.links.iter()), move |acc, import| {
+                let Some(project_dir) = project_dirs.get(import) else {
+                    panic!("Missing import");
+                };
+                let import_iter = project_dir.get_links(project_dirs);
+                Box::new(acc.chain(import_iter))
+            })
     }
 
     pub fn get_absolute_links<'a>(
@@ -68,7 +67,6 @@ impl ProjectDirectory {
     ) -> Vec<(PathBuf, PathBuf)> {
         let links = self.get_links(project_dirs);
         let res: Vec<(PathBuf, PathBuf)> = links
-            .iter()
             .map(|link| {
                 let link_path = self.path.join(link.link.clone());
                 let link_dir = link_path.parent().unwrap();
