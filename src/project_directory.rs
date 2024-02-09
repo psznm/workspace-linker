@@ -64,17 +64,13 @@ impl ProjectDirectory {
     pub fn get_absolute_links<'a>(
         &'a self,
         project_dirs: &'a ProjectDirs,
-    ) -> Vec<(PathBuf, PathBuf)> {
-        let links = self.get_links(project_dirs);
-        let res: Vec<(PathBuf, PathBuf)> = links
-            .map(|link| {
-                let link_path = self.path.join(link.link.clone());
-                let link_dir = link_path.parent().unwrap();
-                let destination_relative =
-                    pathdiff::diff_paths(link.destination_abs.clone(), link_dir).unwrap();
-                (link_path, destination_relative)
-            })
-            .collect();
-        res
+    ) -> impl Iterator<Item = (PathBuf, PathBuf)> + 'a {
+        self.get_links(project_dirs).map(|link| {
+            let link_path = self.path.join(link.link.clone());
+            let link_dir = link_path.parent().unwrap();
+            let destination_relative =
+                pathdiff::diff_paths(link.destination_abs.clone(), link_dir).unwrap();
+            (link_path, destination_relative)
+        })
     }
 }
