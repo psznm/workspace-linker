@@ -16,11 +16,11 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn new(project_path: PathBuf, opts: ProjectDirOpts) -> Self {
+    pub fn new<S: Into<PathBuf>>(project_path: S, opts: ProjectDirOpts) -> Self {
         Project {
             dirs: HashMap::new(),
             opts: Rc::new(opts),
-            project_path,
+            project_path: project_path.into(),
         }
     }
     pub fn load(&mut self, path_relative: PathBuf) -> Result<(), CliError> {
@@ -32,7 +32,7 @@ impl Project {
         trace!("package.json content: {}", pkg_json_content);
         let res: PkgJson = serde_json::from_str(&pkg_json_content)?;
 
-        let mut project_directory = ProjectDirectory::new(dir.clone(), Rc::clone(&self.opts));
+        let mut project_directory = ProjectDirectory::new(dir, Rc::clone(&self.opts));
         if let Some(module_links) = res.module_aliases {
             if let Some(links) = module_links.links {
                 for (link_name, dest_path) in links.iter() {

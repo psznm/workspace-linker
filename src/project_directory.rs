@@ -71,7 +71,7 @@ impl ProjectDirectory {
             let link_path = self.path.join(link.link.clone());
             let link_dir = link_path.parent().unwrap();
             let destination_relative =
-                pathdiff::diff_paths(link.destination_abs.clone(), link_dir).unwrap();
+                pathdiff::diff_paths(&link.destination_abs, link_dir).unwrap();
             (link_path, destination_relative)
         })
     }

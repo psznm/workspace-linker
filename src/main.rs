@@ -47,7 +47,7 @@ fn main() -> Result<(), CliError> {
     let project_root_abs = project_root_path.absolutize()?;
 
     let mut project = Project::new(
-        project_root_abs.into(),
+        project_root_abs,
         ProjectDirOpts {
             no_node_modules: args.node_modules_skip,
             no_workspace: args.workspace_skip,
