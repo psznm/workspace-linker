@@ -4,7 +4,7 @@ use crate::project::ProjectDirs;
 
 struct Link {
     link: PathBuf,
-    destination_abs: PathBuf,
+    destination_abs: Rc<PathBuf>,
 }
 pub struct ProjectDirOpts {
     pub no_node_modules: bool,
@@ -33,7 +33,7 @@ impl ProjectDirectory {
     }
 
     pub fn add_link(&mut self, link: &PathBuf, destination_relative: &PathBuf) {
-        let destination_abs = self.path.join(destination_relative);
+        let destination_abs = Rc::new(self.path.join(destination_relative));
         if !self.options.no_workspace {
             self.links.push(Link {
                 link: link.into(),
@@ -44,7 +44,7 @@ impl ProjectDirectory {
         if !self.options.no_node_modules {
             self.links.push(Link {
                 link: PathBuf::from("node_modules").join(link),
-                destination_abs,
+                destination_abs: destination_abs.clone(),
             });
         }
     }
@@ -71,7 +71,7 @@ impl ProjectDirectory {
             let link_path = self.path.join(link.link.clone());
             let link_dir = link_path.parent().unwrap();
             let destination_relative =
-                pathdiff::diff_paths(&link.destination_abs, link_dir).unwrap();
+                pathdiff::diff_paths(&*link.destination_abs, link_dir).unwrap();
             (link_path, destination_relative)
         })
     }
