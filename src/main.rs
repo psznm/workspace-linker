@@ -1,9 +1,9 @@
 mod project;
 mod project_directory;
-use std::{collections::HashSet, fs, os::unix, path::PathBuf};
+use std::{fs, os::unix, path::PathBuf};
 
 use clap::Parser;
-use log::{debug, info};
+use log::{debug, info, trace};
 use path_absolutize::*;
 use project::Project;
 
@@ -55,12 +55,13 @@ fn main() -> Result<(), CliError> {
     );
 
     project.load("".into())?;
-    let mut seen_links = HashSet::new();
+    let mut seen_links: Vec<PathBuf> = vec![];
     for (link_path, dest_path) in project.get_links() {
-        if seen_links.get(&link_path).is_some() {
+        if seen_links.iter().any(|link| link.eq(&link_path)) {
+            trace!("Skipping link {:?}", link_path);
             break;
         }
-        seen_links.insert(link_path.clone());
+        seen_links.push(link_path.clone());
         let link_dir_abs = link_path.parent().unwrap();
         debug!("Ensuring dir {}", link_dir_abs.display());
         fs::create_dir_all(link_dir_abs)

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 if [ "$(git status --porcelain)" != "" ]; then
 	echo "Clean repository first";
