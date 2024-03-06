@@ -8,5 +8,5 @@ fi
 cargo build -r
 npm version patch
 npm publish
-
+git push
 

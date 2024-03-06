@@ -29,7 +29,6 @@ impl Project {
         let pkg_json_path = dir.join("package.json");
         trace!("package.json path: {pkg_json_path:?}");
         let pkg_json_content = fs::read_to_string(pkg_json_path)?;
-        trace!("package.json content: {}", pkg_json_content);
         let res: PkgJson = serde_json::from_str(&pkg_json_content)?;
 
         let mut project_directory = ProjectDirectory::new(dir, Rc::clone(&self.opts));
