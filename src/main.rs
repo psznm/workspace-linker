@@ -59,7 +59,7 @@ fn main() -> Result<(), CliError> {
     for (link_path, dest_path) in project.get_links() {
         if seen_links.iter().any(|link| link.eq(&link_path)) {
             trace!("Skipping link {:?}", link_path);
-            break;
+            continue;
         }
         seen_links.push(link_path.clone());
         let link_dir_abs = link_path.parent().unwrap();
