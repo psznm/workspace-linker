@@ -56,7 +56,7 @@ impl ProjectDirectory {
             .iter()
             .fold(Box::new(self.links.iter()), move |acc, import| {
                 let Some(project_dir) = project_dirs.get(import) else {
-                    panic!("Missing import");
+                    panic!("Missing import {:?} in {:?}", import, self.path);
                 };
                 let import_iter = project_dir.get_links(project_dirs);
                 Box::new(acc.chain(import_iter))
