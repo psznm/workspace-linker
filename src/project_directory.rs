@@ -1,30 +1,28 @@
-use std::{collections::HashSet, path::PathBuf, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use crate::project::ProjectDirs;
 
 struct Link {
     link: PathBuf,
-    destination_abs: Rc<PathBuf>,
-}
-pub struct ProjectDirOpts {
-    pub no_node_modules: bool,
-    pub no_workspace: bool,
+    destination_relative: PathBuf,
 }
 
 pub struct ProjectDirectory {
-    path: PathBuf,
+    pub path: PathBuf,
     links: Vec<Link>,
     imports: HashSet<PathBuf>,
-    options: Rc<ProjectDirOpts>,
 }
+pub type Paths = HashMap<PathBuf, PathBuf>;
 
 impl ProjectDirectory {
-    pub fn new(path: PathBuf, options: Rc<ProjectDirOpts>) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         ProjectDirectory {
             path,
             links: vec![],
             imports: HashSet::new(),
-            options,
         }
     }
 
@@ -32,21 +30,11 @@ impl ProjectDirectory {
         self.imports.insert(import.into());
     }
 
-    pub fn add_link(&mut self, link: &PathBuf, destination_relative: &PathBuf) {
-        let destination_abs = Rc::new(self.path.join(destination_relative));
-        if !self.options.no_workspace {
-            self.links.push(Link {
-                link: link.into(),
-                destination_abs: destination_abs.clone(),
-            });
-        }
-
-        if !self.options.no_node_modules {
-            self.links.push(Link {
-                link: PathBuf::from("node_modules").join(link),
-                destination_abs: destination_abs.clone(),
-            });
-        }
+    pub fn add_link(&mut self, link: PathBuf, destination_relative: PathBuf) {
+        self.links.push(Link {
+            link,
+            destination_relative,
+        });
     }
     fn get_links<'a>(
         &'a self,
@@ -63,16 +51,13 @@ impl ProjectDirectory {
             })
     }
 
-    pub fn get_absolute_links<'a>(
-        &'a self,
-        project_dirs: &'a ProjectDirs,
-    ) -> impl Iterator<Item = (PathBuf, PathBuf)> + 'a {
-        self.get_links(project_dirs).map(|link| {
-            let link_path = self.path.join(link.link.clone());
-            let link_dir = link_path.parent().unwrap();
-            let destination_relative =
-                pathdiff::diff_paths(&*link.destination_abs, link_dir).unwrap();
-            (link_path, destination_relative)
-        })
+    pub fn get_paths(&self, project_dirs: &ProjectDirs) -> Paths {
+        self.get_links(project_dirs)
+            .fold(Paths::new(), |mut acc, item| {
+                if acc.get(&item.link).is_none() {
+                    acc.insert(item.link.clone(), item.destination_relative.clone());
+                }
+                acc
+            })
     }
 }

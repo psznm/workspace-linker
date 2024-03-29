@@ -1,21 +1,20 @@
 mod project;
 mod project_directory;
-use std::{fs, os::unix, path::PathBuf};
+use std::{collections::BTreeMap, fs, os::unix, path::PathBuf};
 
 use clap::Parser;
-use log::{debug, info, trace};
+use log::{debug, info};
 use path_absolutize::*;
 use project::Project;
-
-use crate::project_directory::ProjectDirOpts;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 struct Cli {
     project_path: Option<PathBuf>,
-    #[arg(short, long, help = "Do not link to node_modules of each workspace")]
-    node_modules_skip: bool,
-    #[arg(short, long, help = "Do not link to root of each workspace")]
-    workspace_skip: bool,
+    #[arg(short, long, help = "Update paths tsconfig.json")]
+    tsconfig_update: bool,
+    #[arg(short, long, help = "Update paths jsconfig.json")]
+    jsconfig_update: bool,
     #[command(flatten)]
     verbosity: clap_verbosity_flag::Verbosity,
 }
@@ -35,6 +34,22 @@ impl From<serde_json::Error> for CliError {
         CliError::Serialization(value)
     }
 }
+type Other = serde_json::Map<String, serde_json::Value>;
+#[derive(Serialize, Deserialize, Debug)]
+struct JsTsConfig {
+    #[serde(flatten)]
+    other: Other,
+    #[serde(rename = "compilerOptions")]
+    compiler_options: CompilerOptions,
+}
+#[derive(Serialize, Deserialize, Debug)]
+struct CompilerOptions {
+    #[serde(flatten)]
+    other: Other,
+    paths: Option<Paths>,
+}
+
+type Paths = BTreeMap<PathBuf, Vec<PathBuf>>;
 
 fn main() -> Result<(), CliError> {
     let args = Cli::parse();
@@ -46,35 +61,77 @@ fn main() -> Result<(), CliError> {
     let project_root_path = PathBuf::from(&project_root);
     let project_root_abs = project_root_path.absolutize()?;
 
-    let mut project = Project::new(
-        project_root_abs,
-        ProjectDirOpts {
-            no_node_modules: args.node_modules_skip,
-            no_workspace: args.workspace_skip,
-        },
-    );
+    let mut project = Project::new(project_root_abs.clone());
 
     project.load("".into())?;
-    let mut seen_links: Vec<PathBuf> = vec![];
-    for (link_path, dest_path) in project.get_links() {
-        if seen_links.iter().any(|link| link.eq(&link_path)) {
-            trace!("Skipping already linked link {:?}", link_path);
-            continue;
-        }
-        seen_links.push(link_path.clone());
-        let link_dir_abs = link_path.parent().unwrap();
-        debug!("Ensuring dir {}", link_dir_abs.display());
-        fs::create_dir_all(link_dir_abs)
-            .map_err(|err| CliError::Io(err, Some(link_dir_abs.into())))?;
 
-        if link_path.exists() || link_path.is_symlink() {
-            debug!("Removing file {}", link_path.display());
-            fs::remove_file(&link_path)
-                .map_err(|err| CliError::Io(err, Some(link_path.clone())))?;
+    for (workspace_path, links) in &project.dirs {
+        let workspace_paths = links.get_paths(&project.dirs);
+        let workspace_path_abs = project_root_abs.join(workspace_path);
+        for (link_path, dest_path_ws_relative) in &workspace_paths {
+            let link_path_abs = workspace_path_abs.join("node_modules").join(link_path);
+            let link_dir_abs = link_path_abs.parent().unwrap();
+
+            let path_from_link_to_ws =
+                pathdiff::diff_paths(&workspace_path_abs, link_dir_abs).unwrap();
+            let dest_path_link_relative = path_from_link_to_ws.join(dest_path_ws_relative);
+            debug!("Ensuring dir {:?}", link_dir_abs);
+            fs::create_dir_all(link_dir_abs)
+                .map_err(|err| CliError::Io(err, Some(link_dir_abs.into())))?;
+
+            if link_path_abs.exists() || link_path_abs.is_symlink() {
+                debug!("Removing file {:?}", link_path_abs);
+                fs::remove_file(&link_path_abs)
+                    .map_err(|err| CliError::Io(err, Some(link_path_abs.clone())))?;
+            }
+            info!(
+                "Linking: {:?} -> {:?}",
+                link_path_abs, dest_path_link_relative
+            );
+            unix::fs::symlink(dest_path_link_relative, link_path_abs)?;
         }
-        info!("Linking: {:?} -> {:?}", link_path, dest_path);
-        unix::fs::symlink(dest_path, link_path)?;
+
+        let links_for_configs: Paths =
+            workspace_paths
+                .into_iter()
+                .fold(Paths::new(), |mut map, item| {
+                    map.insert(item.0.join("*"), vec![item.1.join("*")]);
+                    map
+                });
+
+        if args.tsconfig_update {
+            update_config_json(
+                &workspace_path_abs.join("tsconfig.json"),
+                links_for_configs.clone(),
+            )?;
+        }
+        if args.jsconfig_update {
+            update_config_json(&workspace_path_abs.join("jsconfig.json"), links_for_configs)?;
+        }
     }
 
+    Ok(())
+}
+
+fn update_config_json(config_path: &PathBuf, paths: Paths) -> Result<(), CliError> {
+    if config_path.exists() {
+        info!("Updating: {:?}", config_path);
+        let pkg_json_content = fs::read_to_string(config_path)?;
+        let mut res: JsTsConfig = serde_json::from_str(&pkg_json_content)?;
+        if paths.is_empty() {
+            if res.compiler_options.paths.is_none() {
+                return Ok(());
+            }
+            res.compiler_options.paths = None;
+        } else {
+            res.compiler_options.paths = Some(paths);
+        }
+        let mut buf = Vec::new();
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+        res.serialize(&mut ser).unwrap();
+        let serialized = String::from_utf8(buf).unwrap();
+        fs::write(config_path, format!("{}\n", serialized))?;
+    }
     Ok(())
 }

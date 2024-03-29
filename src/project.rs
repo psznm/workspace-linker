@@ -1,25 +1,20 @@
-use std::{collections::HashMap, fs, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use log::trace;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    project_directory::{ProjectDirOpts, ProjectDirectory},
-    CliError,
-};
+use crate::{project_directory::ProjectDirectory, CliError};
 
 pub type ProjectDirs = HashMap<PathBuf, ProjectDirectory>;
 pub struct Project {
-    dirs: ProjectDirs,
-    opts: Rc<ProjectDirOpts>,
+    pub dirs: ProjectDirs,
     project_path: PathBuf,
 }
 
 impl Project {
-    pub fn new<S: Into<PathBuf>>(project_path: S, opts: ProjectDirOpts) -> Self {
+    pub fn new<S: Into<PathBuf>>(project_path: S) -> Self {
         Project {
             dirs: HashMap::new(),
-            opts: Rc::new(opts),
             project_path: project_path.into(),
         }
     }
@@ -31,11 +26,11 @@ impl Project {
         let pkg_json_content = fs::read_to_string(pkg_json_path)?;
         let res: PkgJson = serde_json::from_str(&pkg_json_content)?;
 
-        let mut project_directory = ProjectDirectory::new(dir, Rc::clone(&self.opts));
+        let mut project_directory = ProjectDirectory::new(dir);
         if let Some(module_links) = res.module_aliases {
             if let Some(links) = module_links.links {
                 for (link_name, dest_path) in links.iter() {
-                    project_directory.add_link(link_name, dest_path);
+                    project_directory.add_link(link_name.clone(), dest_path.clone());
                 }
             }
             if let Some(imports) = module_links.imports {
@@ -51,12 +46,6 @@ impl Project {
             }
         }
         Ok(())
-    }
-
-    pub fn get_links(&self) -> impl Iterator<Item = (PathBuf, PathBuf)> + '_ {
-        self.dirs
-            .values()
-            .flat_map(|dir| dir.get_absolute_links(&self.dirs))
     }
 }
 
